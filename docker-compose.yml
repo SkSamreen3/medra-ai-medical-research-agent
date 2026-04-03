@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  medra-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medra-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    depends_on:
+      - chroma
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ChromaDB Vector Database (optional - can also run locally)
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: medra-chroma
+    ports:
+      - "8001:8000"
+    environment:
+      - IS_PERSISTENT=True
+      - ANONYMIZED_TELEMETRY=False
+    volumes:
+      - ./data/chroma_db:/chroma/chroma
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Streamlit UI (optional)
+  medra-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medra-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    command: streamlit run ui.py --server.port=8501 --server.address=0.0.0.0
+    depends_on:
+      - medra-api
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+    driver: local
+
